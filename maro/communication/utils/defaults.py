@@ -3,7 +3,7 @@
 
 from maro.utils import convert_dottable
 
-proxy = convert_dottable({
+default_params = convert_dottable({
     "fault_tolerant": False,
     "delay_for_slow_joiner": 3,
     "peer_discovery": {
@@ -25,10 +25,7 @@ proxy = convert_dottable({
         "timeout_for_minimal_peer_number": 300,  # second
         "is_remove_failed_container": False,  # Automatically clean the failed container
         "max_rejoin_times": 5
-    }
-})
-
-driver = convert_dottable({
+    },
     "zmq": {
         "protocol": "tcp",
         "send_timeout": -1,

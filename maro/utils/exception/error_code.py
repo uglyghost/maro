@@ -7,8 +7,8 @@ ERROR_CODE = {
     # 1000-1999: Error code for the communication module.
     1000: "MARO Internal Error",
     1001: "Redis Connection Error",
-    1002: "Proxy Peers Missing Error",
-    1003: "Redis Information Uncompleted Error",
+    1002: "No Peer Error",
+    1003: "Peer Discovery Failure",
     1004: "Peers Connection Error",
     1005: "Driver Send Error",
     1006: "Driver Receive Error",

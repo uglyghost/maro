@@ -10,14 +10,14 @@ class RedisConnectionError(MAROException):
         super().__init__(1001, msg)
 
 
-class PeersMissError(MAROException):
-    """Proxy do not have any expected peers."""
+class NoPeerError(MAROException):
+    """Socket wrapper does not have at least one peer."""
     def __init__(self, msg: str = None):
         super().__init__(1002, msg)
 
 
-class InformationUncompletedError(MAROException):
-    """No enough information from the Redis."""
+class PeerDicoveryFailure(MAROException):
+    """Peer discovery failure."""
     def __init__(self, msg: str = None):
         super().__init__(1003, msg)
 
