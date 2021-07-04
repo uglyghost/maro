@@ -3,6 +3,7 @@
 
 from defaults import default_params
 from generate_session_id import session_id_generator
-from redis_helpers import discover_peers, ping, push 
+from message_enums import Signal
+from redis_helpers import PeerFinder
 
-__all__ = ["session_id_generator", "default_params", "discover_peers", "ping", "push"]
+__all__ = ["PeerFinder", "Signal", "session_id_generator", "default_params"]

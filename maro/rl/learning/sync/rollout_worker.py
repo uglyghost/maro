@@ -5,7 +5,8 @@ from multiprocessing.connection import Connection
 from os import getcwd
 from typing import Callable
 
-from maro.communication import Proxy
+from maro.communication.endpoints import SyncWorkerEndpoint
+from maro.communication.utils import Signal
 from maro.rl.utils import MsgKey, MsgTag
 from maro.utils import Logger, set_seeds
 
@@ -109,7 +110,7 @@ def rollout_worker_node(
     env_wrapper: AbsEnvWrapper,
     agent_wrapper: AgentWrapper,
     eval_env_wrapper: AbsEnvWrapper = None,
-    proxy_kwargs: dict = {},
+    endpoint_kwargs: dict = {},
     log_dir: str = getcwd()
 ):
     """Roll-out worker process that can be launched on separate computation nodes.
@@ -123,36 +124,33 @@ def rollout_worker_node(
         agent_wrapper (AgentWrapper): Agent wrapper to interact with the environment wrapper.
         eval_env_wrapper (AbsEnvWrapper): Environment wrapper for evaluation. If this is None, the training
             environment wrapper will be used for evaluation. Defaults to None.
-        proxy_kwargs: Keyword parameters for the internal ``Proxy`` instance. See ``Proxy`` class
+        endpoint_kwargs: Keyword parameters for the internal ``Proxy`` instance. See ``Proxy`` class
             for details. Defaults to the empty dictionary.
         log_dir (str): Directory to store logs in. Defaults to the current working directory.
     """
     eval_env_wrapper = env_wrapper if not eval_env_wrapper else eval_env_wrapper
 
-    proxy = Proxy(
-        group, "rollout_worker", {"rollout_manager": 1},
-        component_name=f"ROLLOUT_WORKER.{int(worker_id)}", **proxy_kwargs
-    )
-    logger = Logger(proxy.name, dump_folder=log_dir)
+    endpoint = SyncWorkerEndpoint(group, component_name=f"ROLLOUT_WORKER.{int(worker_id)}", **endpoint_kwargs)
+    logger = Logger(endpoint.name, dump_folder=log_dir)
 
     def collect(msg):
-        ep, segment = msg.body[MsgKey.EPISODE], msg.body[MsgKey.SEGMENT]
+        ep, segment = msg["body"][MsgKey.EPISODE], msg["body"][MsgKey.SEGMENT]
 
         # set policy states
-        agent_wrapper.set_policy_states(msg.body[MsgKey.POLICY_STATE])
+        agent_wrapper.set_policy_states(msg["body"][MsgKey.POLICY_STATE])
 
         # set exploration parameters
         agent_wrapper.explore()
-        if msg.body[MsgKey.EXPLORATION_STEP]:
+        if msg["body"][MsgKey.EXPLORATION_STEP]:
             agent_wrapper.exploration_step()
 
         if env_wrapper.state is None:
-            logger.info(f"Training episode {msg.body[MsgKey.EPISODE]}")
+            logger.info(f"Training episode {msg['body'][MsgKey.EPISODE]}")
             env_wrapper.reset()
             env_wrapper.start()  # get initial state
 
         starting_step_index = env_wrapper.step_index + 1
-        steps_to_go = float("inf") if msg.body[MsgKey.NUM_STEPS] == -1 else msg.body[MsgKey.NUM_STEPS]
+        steps_to_go = float("inf") if msg["body"][MsgKey.NUM_STEPS] == -1 else msg["body"][MsgKey.NUM_STEPS]
         while env_wrapper.state and steps_to_go > 0:
             action = agent_wrapper.choose_action(env_wrapper.state)
             env_wrapper.step(action)
@@ -170,17 +168,17 @@ def rollout_worker_node(
             MsgKey.EPISODE_END: not env_wrapper.state,
             MsgKey.EPISODE: ep,
             MsgKey.SEGMENT: segment,
-            MsgKey.VERSION: msg.body[MsgKey.VERSION],
+            MsgKey.VERSION: msg["body"][MsgKey.VERSION],
             MsgKey.EXPERIENCES: ret_exp,
             MsgKey.ENV_SUMMARY: env_wrapper.summary,
             MsgKey.NUM_STEPS: env_wrapper.step_index - starting_step_index + 1
         }
 
-        proxy.reply(msg, tag=MsgTag.COLLECT_DONE, body=return_info)
+        endpoint.send({"type": MsgTag.COLLECT_DONE, "body": return_info})
 
     def evaluate(msg):
         logger.info("Evaluating...")
-        agent_wrapper.set_policy_states(msg.body[MsgKey.POLICY_STATE])
+        agent_wrapper.set_policy_states(msg["body"][MsgKey.POLICY_STATE])
         agent_wrapper.exploit()
         eval_env_wrapper.reset()
         eval_env_wrapper.start()  # get initial state
@@ -188,8 +186,8 @@ def rollout_worker_node(
             action = agent_wrapper.choose_action(eval_env_wrapper.state)
             eval_env_wrapper.step(action)
 
-        return_info = {MsgKey.ENV_SUMMARY: eval_env_wrapper.summary, MsgKey.EPISODE: msg.body[MsgKey.EPISODE]}
-        proxy.reply(msg, tag=MsgTag.EVAL_DONE, body=return_info)
+        return_info = {MsgKey.ENV_SUMMARY: eval_env_wrapper.summary, MsgKey.EPISODE: msg["body"][MsgKey.EPISODE]}
+        endpoint.send({"type": MsgTag.EVAL_DONE, "body": return_info})
 
     """
     The event loop handles 3 types of messages from the roll-out manager:
@@ -200,13 +198,14 @@ def rollout_worker_node(
         3)  EXIT, upon which it will break out of the event loop and the process will terminate.
 
     """
-    for msg in proxy.receive():
-        if msg.tag == MsgTag.EXIT:
-            logger.info("Exiting...")
-            proxy.close()
+    while True:
+        msg = endpoint.receive()
+        if msg == Signal.EXIT:
+            endpoint.close()
+            logger.info(f"{endpoint.name} exiting...")
             break
 
-        if msg.tag == MsgTag.COLLECT:
+        if msg["type"] == MsgTag.COLLECT:
             collect(msg)
-        elif msg.tag == MsgTag.EVAL:
+        elif msg["type"] == MsgTag.EVAL:
             evaluate(msg)

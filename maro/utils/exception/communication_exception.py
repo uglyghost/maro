@@ -28,7 +28,7 @@ class PeersConnectionError(MAROException):
         super().__init__(1004, msg)
 
 
-class DriverSendError(MAROException):
+class SendError(MAROException):
     """Failure to send message in the driver."""
     def __init__(self, msg: str = None):
         super().__init__(1005, msg)

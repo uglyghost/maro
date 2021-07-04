@@ -5,8 +5,10 @@ import time
 from multiprocessing.connection import Connection
 from os import getcwd
 from typing import Callable, Dict
+from maro.communication import endpoints
 
-from maro.communication import Proxy
+from maro.communication.endpoints import SyncWorkerEndpoint
+from maro.communication.utils import Signal
 from maro.rl.utils import MsgKey, MsgTag
 from maro.utils import Logger
 
@@ -55,7 +57,7 @@ def trainer_node(
     group: str,
     trainer_idx: int,
     create_policy_func_dict: Dict[str, Callable],
-    proxy_kwargs: dict = {},
+    endpoint_kwargs: dict = {},
     log_dir: str = getcwd()
 ):
     """Policy trainer process that can be launched on separate computation nodes.
@@ -67,34 +69,34 @@ def trainer_node(
         create_policy_func_dict (dict): A dictionary mapping policy names to functions that create them. The policy
             creation function should have exactly one parameter which is the policy name and return an ``AbsPolicy``
             instance.
-        proxy_kwargs: Keyword parameters for the internal ``Proxy`` instance. See ``Proxy`` class
+        endpoint_kwargs: Keyword parameters for the internal ``Proxy`` instance. See ``Proxy`` class
             for details. Defaults to the empty dictionary.
         log_dir (str): Directory to store logs in. Defaults to the current working directory.
     """
     policy_dict = {}
-    proxy = Proxy(group, "trainer", {"policy_manager": 1}, component_name=f"TRAINER.{trainer_idx}", **proxy_kwargs)
-    logger = Logger(proxy.name, dump_folder=log_dir)
+    endpoint = SyncWorkerEndpoint(group, f"TRAINER.{trainer_idx}", **endpoint_kwargs) 
+    logger = Logger(endpoint.name, dump_folder=log_dir)
 
-    for msg in proxy.receive():
-        if msg.tag == MsgTag.EXIT:
-            logger.info("Exiting...")
-            proxy.close()
+    while True:
+        msg = endpoint.receive()
+        if msg == Signal.EXIT:
+            endpoint.close()
+            logger.info(f"{endpoint.name} exiting...")
             break
 
-        if msg.tag == MsgTag.INIT_POLICY_STATE:
-            for name, state in msg.body[MsgKey.POLICY_STATE].items():
+        if msg["type"] == MsgTag.INIT_POLICY_STATE:
+            for name, state in msg["body"].items():
                 policy_dict[name] = create_policy_func_dict[name]()
                 policy_dict[name].set_state(state)
-                logger.info(f"{proxy.name} initialized policy {name}")
-            proxy.reply(msg, tag=MsgTag.INIT_POLICY_STATE_DONE)
-        elif msg.tag == MsgTag.TRAIN:
+            endpoint.send({"type": MsgTag.INIT_POLICY_STATE_DONE})
+        elif msg["type"] == MsgTag.TRAIN:
             t0 = time.time()
             msg_body = {
                 MsgKey.POLICY_STATE: {
-                    name: policy_dict[name].get_state() for name, exp in msg.body[MsgKey.EXPERIENCES].items()
+                    name: policy_dict[name].get_state() for name, exp in msg["body"].items()
                     if policy_dict[name].on_experiences(exp)
                 }
             }
             logger.info(f"updated policies {list(msg_body[MsgKey.POLICY_STATE].keys())}")
             logger.debug(f"total policy update time: {time.time() - t0}")
-            proxy.reply(msg, body=msg_body)
+            endpoint.send({"type": MsgTag.POLICY_STATE, "body": msg_body})
