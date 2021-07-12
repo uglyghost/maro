@@ -1,10 +1,10 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
-import time
 from abc import ABC, abstractmethod
 
 from maro.rl.experience import ExperienceManager, ExperienceSet
+from maro.rl.exploration import AbsExploration
 
 
 class AbsPolicy(ABC):
@@ -34,28 +34,20 @@ class AbsCorePolicy(AbsPolicy):
     Args:
         experience_manager (ExperienceManager): An experience manager for storing and retrieving experiences
             for training.
-        update_trigger (int): Minimum number of new experiences required to trigger an ``update`` call. Defaults to 1.
-        warmup (int): Minimum number of experiences in the experience memory required to trigger an ``update`` call.
-            Defaults to 1.
+        exploration (AbsExploration): Exploration strategy for generating exploratory actions. Defaults to None.
     """
-    def __init__(
-        self,
-        experience_manager: ExperienceManager,
-        update_trigger: int = 1,
-        warmup: int = 1
-    ):
+    def __init__(self, experience_manager: ExperienceManager, exploration: AbsExploration = None):
         super().__init__()
         self.experience_manager = experience_manager
-        self.update_trigger = update_trigger
-        self.warmup = warmup
-        self._new_exp_counter = 0
+        self.exploration = exploration
+        self.exploring = True
 
     @abstractmethod
     def choose_action(self, state):
         raise NotImplementedError
 
     @abstractmethod
-    def update(self):
+    def learn(self):
         """Policy update logic is implemented here.
 
         This usually includes retrieving experiences as training samples from the experience manager and
@@ -83,23 +75,24 @@ class AbsCorePolicy(AbsPolicy):
         """
         pass
 
-    def on_experiences(self, exp: ExperienceSet) -> bool:
+    def store(self, exp: ExperienceSet) -> bool:
         """
         Store incoming experiences and update if necessary.
         """
         self.experience_manager.put(exp)
-        self._new_exp_counter += exp.size
-        print(
-            f"exp mem size = {self.experience_manager.size}, incoming: {exp.size}, new exp = {self._new_exp_counter}"
-        )
-        if self.experience_manager.size >= self.warmup and self._new_exp_counter >= self.update_trigger:
-            t0 = time.time()
-            self.update()
-            print(f"policy update time: {time.time() - t0}")
-            self._new_exp_counter = 0
-            return True
+        # print(
+        #     f"exp mem size = {self.experience_manager.size}, incoming: {exp.size}, new exp = {self._new_exp_counter}"
+        # )
 
-        return False
+    def exploit(self):
+        self.exploring = False
+
+    def explore(self):
+        self.exploring = True
+
+    def exploration_step(self):
+        if self.exploration:
+            self.exploration.step()
 
     def load(self, path: str):
         """Load the policy state from disk."""

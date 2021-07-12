@@ -23,10 +23,6 @@ class ManagerEndpoint(AbsEndpoint):
             as the hash key when registering itself to and getting peer addresses from the Redis server.
         name (str): Unique identifier for this wrapper within the ``group`` namespace.    
         protocol (str): The underlying transport-layer protocol for transferring messages. Defaults to "tcp".
-        send_timeout (int): The timeout in milliseconds for sending message. If -1, no timeout (infinite).
-            Defaults to -1.
-        recv_timeout (int): The timeout in milliseconds for receiving message. If -1, no timeout (infinite).
-            Defaults to -1.
         logger: The logger instance or DummyLogger. Defaults to DummyLogger().
     """
 
@@ -36,7 +32,6 @@ class ManagerEndpoint(AbsEndpoint):
         name: str,
         num_workers: int,
         protocol: str = default_params.zmq.protocol,
-        recv_timeout: int = default_params.zmq.receive_timeout,
         redis_address: Tuple = (default_params.redis.host, default_params.redis.port),
         initial_redis_connect_retry_interval: int = default_params.redis.initial_retry_interval,
         max_redis_connect_retries: int = default_params.redis.max_retries,
@@ -53,11 +48,8 @@ class ManagerEndpoint(AbsEndpoint):
         self._name = name
         self._ip_address = socket.gethostbyname(socket.gethostname())
 
-        self._recv_timeout = recv_timeout
-
         self._context = zmq.Context()
         self._socket = self._context.socket(zmq.ROUTER)
-        self._socket.setsockopt(zmq.RCVTIMEO, self._recv_timeout)
 
         port = self._socket.bind_to_random_port(f"{self._protocol}://*")
         self._address = f"{self._protocol}://{self._ip_address}:{port}"
@@ -81,8 +73,9 @@ class ManagerEndpoint(AbsEndpoint):
     def workers(self):
         return self._workers
 
-    def receive(self):
+    def receive(self, timeout: int = -1):
         try:
+            self._socket.setsockopt(zmq.RCVTIMEO, timeout)
             peer_id, _, payload = self._socket.recv_multipart()
             return pickle.loads(payload), peer_id
         except zmq.ZMQError:

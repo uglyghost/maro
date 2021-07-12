@@ -40,15 +40,11 @@ def trainer_process(
         msg = conn.recv()
         if msg["type"] == "train":
             t0 = time.time()
-            updated = {
-                name: policy_dict[name].get_state() for name, exp in msg["experiences"].items()
-                if policy_dict[name].on_experiences(exp)
-            }
+            for name, exp in msg["experiences"].items():
+                policy_dict[name].store(exp)
+                policy_dict[name].learn()
             logger.debug(f"total policy update time: {time.time() - t0}")
-            conn.send({"policy": updated})
-        elif msg["type"] == "get_policy_state":
-            policy_state_dict = {name: policy.get_state() for name, policy in policy_dict.items()}
-            conn.send({"policy": policy_state_dict})
+            conn.send({"policy": {name: policy_dict[name].get_state() for name in msg["experiences"]}})
         elif msg["type"] == "quit":
             break
 
@@ -73,8 +69,9 @@ def trainer_node(
             for details. Defaults to the empty dictionary.
         log_dir (str): Directory to store logs in. Defaults to the current working directory.
     """
+    trainer_id = f"TRAINER.{trainer_idx}"
     policy_dict = {}
-    endpoint = SyncWorkerEndpoint(group, f"TRAINER.{trainer_idx}", **endpoint_kwargs) 
+    endpoint = SyncWorkerEndpoint(group, trainer_id, **endpoint_kwargs) 
     logger = Logger(endpoint.name, dump_folder=log_dir)
 
     while True:
@@ -88,15 +85,14 @@ def trainer_node(
             for name, state in msg["body"].items():
                 policy_dict[name] = create_policy_func_dict[name]()
                 policy_dict[name].set_state(state)
+                logger.info(f"{trainer_id} initialized policy {name}")
             endpoint.send({"type": MsgTag.INIT_POLICY_STATE_DONE})
-        elif msg["type"] == MsgTag.TRAIN:
+        elif msg["type"] == MsgTag.LEARN:
             t0 = time.time()
-            msg_body = {
-                MsgKey.POLICY_STATE: {
-                    name: policy_dict[name].get_state() for name, exp in msg["body"].items()
-                    if policy_dict[name].on_experiences(exp)
-                }
-            }
-            logger.info(f"updated policies {list(msg_body[MsgKey.POLICY_STATE].keys())}")
+            for name, exp in msg["body"].items():
+                policy_dict[name].store(exp)
+                policy_dict[name].learn()
+
+            policy_states = {name: policy_dict[name].get_state() for name in msg["body"]}
             logger.debug(f"total policy update time: {time.time() - t0}")
-            endpoint.send({"type": MsgTag.POLICY_STATE, "body": msg_body})
+            endpoint.send({"type": MsgTag.POLICY_STATE, "body": policy_states})
