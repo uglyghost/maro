@@ -39,7 +39,7 @@ def get_policy_manager():
             num_trainers,
             update_trigger=update_trigger,
             warmup=warmup,
-            proxy_kwargs={"redis_address": (config["redis"]["host"], config["redis"]["port"])},
+            endpoint_kwargs={"redis_address": (config["redis"]["host"], config["redis"]["port"])},
             log_dir=log_dir
         )
 

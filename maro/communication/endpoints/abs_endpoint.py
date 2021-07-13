@@ -37,8 +37,8 @@ class AbsEndpoint(ABC):
         self._group = group
         self._name = name
         self._protocol = protocol
-
         self.peer_finder = PeerFinder(
+            group, name,
             host=redis_address[0],
             port=redis_address[1],
             initial_ping_retry_wait=initial_ping_retry_wait,

@@ -276,7 +276,7 @@ class MultiNodePolicyManager(AbsPolicyManager):
             )
 
         for _ in range(len(self._trainer2policies)):
-            trainer_id, _, _ = self._endpoint.receive()
+            _, trainer_id = self._endpoint.receive()
             self._logger.info(f"{trainer_id} initialized policies {self._trainer2policies[trainer_id]}")
 
     def update(self, exp_by_policy: Dict[str, ExperienceSet]):

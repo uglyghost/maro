@@ -34,9 +34,9 @@ class SyncWorkerEndpoint(AbsEndpoint):
         protocol: str = default_params.zmq.protocol,
         send_timeout: int = default_params.zmq.send_timeout,
         redis_address: Tuple = (default_params.redis.host, default_params.redis.port),
-        initial_redis_connect_retry_interval: int = default_params.redis.initial_retry_interval,
-        max_redis_connect_retries: int = default_params.redis.max_retries,
-        initial_peer_discovery_retry_interval: int = default_params.peer_discovery.initial_retry_interval,
+        initial_ping_retry_wait: int = default_params.redis.initial_ping_retry_wait,
+        max_ping_retries: int = default_params.redis.max_retries,
+        initial_peer_discovery_retry_wait: int = default_params.peer_discovery.initial_retry_wait,
         max_peer_discovery_retries: int = default_params.peer_discovery.max_retries,
         log_dir: str = os.getcwd()
     ):
@@ -44,8 +44,8 @@ class SyncWorkerEndpoint(AbsEndpoint):
             group, name,
             protocol=protocol,
             redis_address=redis_address,
-            initial_redis_connect_retry_interval=initial_redis_connect_retry_interval,
-            max_redis_connect_retries=max_redis_connect_retries,
+            initial_ping_retry_wait=initial_ping_retry_wait,
+            max_ping_retries=max_ping_retries,
             log_dir=log_dir
         )
 
@@ -53,17 +53,16 @@ class SyncWorkerEndpoint(AbsEndpoint):
         self._send_timeout = send_timeout
         self._socket = self._context.socket(zmq.REQ)
         self._socket.setsockopt(zmq.SNDTIMEO, self._send_timeout)
-        self._socket.setsockopt(zmq.IDENTITY, bytes(self._name))
+        self._socket.setsockopt(zmq.IDENTITY, self._name.encode())
 
         # peer discovery
         self._socket.connect(
             self.peer_finder.discover(
                 manager,
-                initial_retry_interval=initial_peer_discovery_retry_interval,
+                initial_retry_wait=initial_peer_discovery_retry_wait,
                 max_retries=max_peer_discovery_retries
             )
         )
-
         self.send(Signal.ONBOARD)
 
     @property

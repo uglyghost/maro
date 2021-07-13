@@ -64,5 +64,5 @@ class PeerFinder:
                 next_retry *= 2
             else:
                 return [json.loads(addr) for addr in addresses] if len(addresses) > 1 else json.loads(addresses[0])
-        
+
         raise PeerDicoveryFailure(f"{self._name} failed to discover all peers.")

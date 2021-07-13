@@ -46,7 +46,7 @@ def get_rollout_manager():
             # max_extra_recv_tries=config["sync"]["max_extra_recv_tries"],
             extra_recv_timeout=config["sync"]["extra_recv_timeout"],
             log_env_summary=config["log_env_summary"],
-            proxy_kwargs={"redis_address": (config["redis"]["host"], config["redis"]["port"])}
+            endpoint_kwargs={"redis_address": (config["redis"]["host"], config["redis"]["port"])}
         )
 
     raise ValueError(

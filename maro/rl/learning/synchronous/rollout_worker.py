@@ -7,7 +7,7 @@ from typing import Callable
 
 from maro.communication.endpoints import SyncWorkerEndpoint
 from maro.communication.utils import Signal
-from maro.rl.utils import MsgKey, MsgTag
+from maro.rl.utils import MsgTag
 from maro.utils import Logger, set_seeds
 
 from ..agent_wrapper import AgentWrapper
@@ -125,10 +125,10 @@ def rollout_worker_node(
             for details. Defaults to the empty dictionary.
         log_dir (str): Directory to store logs in. Defaults to the current working directory.
     """
+    worker_id = f"ROLLOUT_WORKER.{worker_id}"
+    logger = Logger(worker_id, dump_folder=log_dir)
     eval_env_wrapper = env_wrapper if not eval_env_wrapper else eval_env_wrapper
-
-    endpoint = SyncWorkerEndpoint(group, component_name=f"ROLLOUT_WORKER.{int(worker_id)}", **endpoint_kwargs)
-    logger = Logger(endpoint.name, dump_folder=log_dir)
+    endpoint = SyncWorkerEndpoint(group, worker_id, "ROLLOUT_MANAGER", **endpoint_kwargs)
 
     def collect(msg):
         ep, segment = msg["body"]["episode"], msg["body"]["segment"]

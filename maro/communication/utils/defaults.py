@@ -16,16 +16,6 @@ default_params = convert_dottable({
         "initial_ping_retry_wait": 0.1,
         "max_retries": 10
     },
-    "peer_rejoin": {
-        "enable": False,
-        "peers_catch_lifetime": 10,
-        "minimal_peers": 1,  # int, minimal request peer number; or dict {"peer_type": int} for each peer type
-        "enable_message_cache": False,
-        "max_length_for_message_cache": 1024,   # The maximum number of pending messages for each peer
-        "timeout_for_minimal_peer_number": 300,  # second
-        "is_remove_failed_container": False,  # Automatically clean the failed container
-        "max_rejoin_times": 5
-    },
     "zmq": {
         "protocol": "tcp",
         "send_timeout": -1,

@@ -18,6 +18,7 @@ class MsgTag(Enum):
     EVAL_DONE = "eval_done"
     COLLECT_DONE = "collect_done"
     DONE = "done"
+    EXIT = "exit"
 
 
 class MsgKey(Enum):

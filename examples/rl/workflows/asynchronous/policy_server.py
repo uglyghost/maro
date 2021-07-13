@@ -20,6 +20,6 @@ if __name__ == "__main__":
         get_policy_manager(),
         config["async"]["num_actors"],
         max_lag=config["max_lag"],
-        proxy_kwargs={"redis_address": (config["redis"]["host"], config["redis"]["port"])},
+        endpoint_kwargs={"redis_address": (config["redis"]["host"], config["redis"]["port"])},
         log_dir=log_dir
     )

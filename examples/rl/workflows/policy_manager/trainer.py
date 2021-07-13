@@ -19,6 +19,6 @@ if __name__ == "__main__":
         config["policy_manager"]["train_group"],
         int(environ["TRAINERID"]),
         rl_policy_func_index,
-        proxy_kwargs={"redis_address": (config["redis"]["host"], config["redis"]["port"])},
+        endpoint_kwargs={"redis_address": (config["redis"]["host"], config["redis"]["port"])},
         log_dir=log_dir
     )

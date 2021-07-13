@@ -38,7 +38,7 @@ config = {
     "algorithm": {
         "reward_discount": .0,
         "target_update_freq": 5,
-        "train_epochs": 10,
+        "train_epochs": 100,
         "soft_update_coefficient": 0.1,
         "double": False
     },

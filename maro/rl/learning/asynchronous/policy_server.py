@@ -14,7 +14,7 @@ def policy_server(
     policy_manager: AbsPolicyManager,
     num_actors: int,
     max_lag: int = 0,
-    proxy_kwargs: dict = {},
+    endpoint_kwargs: dict = {},
     log_dir: str = getcwd()
 ):
     """Policy server process.
@@ -29,13 +29,13 @@ def policy_server(
         max_lag (int): Maximum policy version lag allowed for experiences collected from remote actors. Experiences
             collected using policy versions older than (current_version - max_lag) will be discarded.
             Defaults to 0, in which case only experiences collected using the latest policy version will be returned.
-        proxy_kwargs: Keyword parameters for the internal ``Proxy`` instance. See ``Proxy`` class
+        endpoint_kwargs: Keyword parameters for the internal ``Proxy`` instance. See ``Proxy`` class
             for details. Defaults to the empty dictionary.
         log_dir (str): Directory to store logs in. Defaults to the current working directory.
     """
     peers = {"actor": num_actors}
     name = "POLICY_SERVER"
-    proxy = Proxy(group, "policy_server", peers, component_name=name, **proxy_kwargs)
+    proxy = Proxy(group, "policy_server", peers, component_name=name, **endpoint_kwargs)
     logger = Logger(name, dump_folder=log_dir)
 
     num_active_actors = num_actors

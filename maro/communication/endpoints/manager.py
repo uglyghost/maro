@@ -33,16 +33,16 @@ class ManagerEndpoint(AbsEndpoint):
         num_workers: int,
         protocol: str = default_params.zmq.protocol,
         redis_address: Tuple = (default_params.redis.host, default_params.redis.port),
-        initial_redis_connect_retry_interval: int = default_params.redis.initial_retry_interval,
-        max_redis_connect_retries: int = default_params.redis.max_retries,
+        initial_ping_retry_wait: int = default_params.redis.initial_ping_retry_wait,
+        max_ping_retries: int = default_params.redis.max_retries,
         log_dir: str = os.getcwd()
     ):
         super().__init__(
             group, name,
             protocol=protocol,
             redis_address=redis_address,
-            initial_redis_connect_retry_interval=initial_redis_connect_retry_interval,
-            max_redis_connect_retries=max_redis_connect_retries,
+            initial_ping_retry_wait=initial_ping_retry_wait,
+            max_ping_retries=max_ping_retries,
             log_dir=log_dir
         )
         self._name = name
@@ -57,13 +57,14 @@ class ManagerEndpoint(AbsEndpoint):
 
         # Initialize connection to the redis server.
         self.peer_finder.register(self._address)
-
+        self.logger.info(f"Uploaded address {self._address} to redis")
         self._workers = []
         while len(self._workers) != num_workers:
-            worker_id, _, content = self.receive()
+            worker_id, _, content = self._socket.recv_multipart()
+            content = pickle.loads(content)
             if content == Signal.ONBOARD:
                 self._workers.append(worker_id)
-                self.logger.info(f"{worker_id} onboard")
+                self.logger.info(f"{str(worker_id)} onboard")
 
     @property
     def address(self):

@@ -5,11 +5,10 @@ import time
 from multiprocessing.connection import Connection
 from os import getcwd
 from typing import Callable, Dict
-from maro.communication import endpoints
 
 from maro.communication.endpoints import SyncWorkerEndpoint
 from maro.communication.utils import Signal
-from maro.rl.utils import MsgKey, MsgTag
+from maro.rl.utils import MsgTag
 from maro.utils import Logger
 
 
@@ -70,9 +69,9 @@ def trainer_node(
         log_dir (str): Directory to store logs in. Defaults to the current working directory.
     """
     trainer_id = f"TRAINER.{trainer_idx}"
+    logger = Logger(trainer_id, dump_folder=log_dir)
     policy_dict = {}
-    endpoint = SyncWorkerEndpoint(group, trainer_id, **endpoint_kwargs) 
-    logger = Logger(endpoint.name, dump_folder=log_dir)
+    endpoint = SyncWorkerEndpoint(group, trainer_id, "POLICY_MANAGER", **endpoint_kwargs) 
 
     while True:
         msg = endpoint.receive()
@@ -93,6 +92,6 @@ def trainer_node(
                 policy_dict[name].store(exp)
                 policy_dict[name].learn()
 
+            logger.info(f"total policy update time: {time.time() - t0}")
             policy_states = {name: policy_dict[name].get_state() for name in msg["body"]}
-            logger.debug(f"total policy update time: {time.time() - t0}")
             endpoint.send({"type": MsgTag.POLICY_STATE, "body": policy_states})

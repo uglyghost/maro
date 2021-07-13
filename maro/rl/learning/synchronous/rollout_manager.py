@@ -451,10 +451,10 @@ class MultiNodeRolloutManager(AbsRolloutManager):
 
         # The message is what we expect
         if msg["body"]["episode"] == ep and msg["body"]["segment"] == segment:
-            if "env_summary" in msg["body"]:
+            if "summary" in msg["body"]:
                 # log roll-out summary
                 if self._log_env_summary:
-                    self._logger.info(f"env summary: {msg['body']['env_summary']}")
+                    self._logger.info(f"env summary: {msg['body']['summary']}")
                 self.episode_complete = True
             return 1
 
