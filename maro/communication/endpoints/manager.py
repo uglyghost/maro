@@ -101,3 +101,12 @@ class ManagerEndpoint(AbsEndpoint):
         self._context.term()
 
         self._logger.info(f"{self._name} Exiting...")
+
+    def close(self):
+        """Close ZMQ context and sockets."""
+        # Avoid hanging infinitely
+        self._context.setsockopt(zmq.LINGER, 0)
+
+        # Close all sockets
+        self._socket.close()
+        self._context.term()
