@@ -1,6 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
+from maro.utils.logger import Logger
 import os
 import pickle
 import socket
@@ -23,7 +24,6 @@ class ManagerEndpoint(AbsEndpoint):
             as the hash key when registering itself to and getting peer addresses from the Redis server.
         name (str): Unique identifier for this wrapper within the ``group`` namespace.    
         protocol (str): The underlying transport-layer protocol for transferring messages. Defaults to "tcp".
-        logger: The logger instance or DummyLogger. Defaults to DummyLogger().
     """
 
     def __init__(
@@ -42,9 +42,9 @@ class ManagerEndpoint(AbsEndpoint):
             protocol=protocol,
             redis_address=redis_address,
             initial_ping_retry_wait=initial_ping_retry_wait,
-            max_ping_retries=max_ping_retries,
-            log_dir=log_dir
+            max_ping_retries=max_ping_retries
         )
+        self._logger = Logger("MANAGER_ENDPOINT", dump_folder=log_dir)
         self._name = name
         self._ip_address = socket.gethostbyname(socket.gethostname())
 
@@ -53,18 +53,18 @@ class ManagerEndpoint(AbsEndpoint):
 
         port = self._socket.bind_to_random_port(f"{self._protocol}://*")
         self._address = f"{self._protocol}://{self._ip_address}:{port}"
-        self.logger.info(f"Ready to communicate at {self._address}.")
+        self._logger.info(f"Ready to communicate at {self._address}.")
 
         # Initialize connection to the redis server.
         self.peer_finder.register(self._address)
-        self.logger.info(f"Uploaded address {self._address} to redis")
+        self._logger.info(f"Uploaded address {self._address} to redis")
         self._workers = []
         while len(self._workers) != num_workers:
             worker_id, _, content = self._socket.recv_multipart()
             content = pickle.loads(content)
             if content == Signal.ONBOARD:
                 self._workers.append(worker_id)
-                self.logger.info(f"{str(worker_id)} onboard")
+                self._logger.info(f"{str(worker_id)} onboard")
 
     @property
     def address(self):
@@ -80,7 +80,7 @@ class ManagerEndpoint(AbsEndpoint):
             peer_id, _, payload = self._socket.recv_multipart()
             return pickle.loads(payload), peer_id
         except zmq.ZMQError:
-            self.logger.error(f"Receive timed out")
+            self._logger.error(f"Receive timed out")
 
     def send(self, peer_id, msg):
         try:
@@ -100,4 +100,4 @@ class ManagerEndpoint(AbsEndpoint):
         self._socket.close()
         self._context.term()
 
-        self.logger.info(f"{self._name} Exiting...")
+        self._logger.info(f"{self._name} Exiting...")

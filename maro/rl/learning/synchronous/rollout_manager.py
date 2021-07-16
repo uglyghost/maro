@@ -253,7 +253,7 @@ class MultiProcessRolloutManager(AbsRolloutManager):
 
         self._worker_processes = []
         self._manager_ends = []
-        for index in range(self.num_workers):
+        for index in range(self._num_workers):
             manager_end, worker_end = Pipe()
             self._manager_ends.append(manager_end)
             worker = Process(
@@ -407,19 +407,18 @@ class MultiNodeRolloutManager(AbsRolloutManager):
             post_evaluate=post_evaluate,
             log_dir=log_dir
         )
-        self.num_workers = num_workers
+        self._num_workers = num_workers
         self._endpoint = ManagerEndpoint(group, "ROLLOUT_MANAGER", num_workers, **endpoint_kwargs)
-        self._logger = Logger(self._endpoint.name, dump_folder=log_dir)
 
         self._num_steps = num_steps
         if min_finished_workers is None:
-            min_finished_workers = self.num_workers
+            min_finished_workers = self._num_workers
             self._logger.info(f"Minimum number of finished workers is set to {min_finished_workers}")
 
         self._min_finished_workers = min_finished_workers
 
         if max_extra_recv_tries is None:
-            max_extra_recv_tries = self.num_workers - self._min_finished_workers
+            max_extra_recv_tries = self._num_workers - self._min_finished_workers
             self._logger.info(f"Maximum number of extra receive tries is set to {max_extra_recv_tries}")
 
         self._max_extra_recv_tries = max_extra_recv_tries

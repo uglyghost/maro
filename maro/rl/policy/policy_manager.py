@@ -299,9 +299,7 @@ class MultiNodePolicyManager(AbsPolicyManager):
             log_dir=log_dir
         )
         self._endpoint = ManagerEndpoint(group, "POLICY_MANAGER", num_trainers, **endpoint_kwargs)
-        self._logger = Logger(self._endpoint.name, dump_folder=log_dir)
-
-        self.num_trainers = len(self._endpoint.workers)
+        self._num_trainers = len(self._endpoint.workers)
         self._exp_cache = defaultdict(ExperienceSet)
         self._num_experiences_by_policy = defaultdict(int)
 
@@ -346,7 +344,7 @@ class MultiNodePolicyManager(AbsPolicyManager):
             )
 
         trackers = []
-        for _ in range(self.num_trainers):
+        for _ in range(self._num_trainers):
             result, _ = self._endpoint.receive()
             trackers.append(result["tracker"])
             for policy_name, policy_state in result["policy_state"].items():

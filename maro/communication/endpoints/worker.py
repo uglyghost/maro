@@ -1,6 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
+from maro.utils.logger import Logger
 import os
 import pickle
 from typing import Tuple
@@ -23,7 +24,6 @@ class SyncWorkerEndpoint(AbsEndpoint):
             Defaults to -1.
         recv_timeout (int): The timeout in milliseconds for receiving message. If -1, no timeout (infinite).
             Defaults to -1.
-        logger: The logger instance or DummyLogger. Defaults to DummyLogger().
     """
 
     def __init__(
@@ -45,10 +45,9 @@ class SyncWorkerEndpoint(AbsEndpoint):
             protocol=protocol,
             redis_address=redis_address,
             initial_ping_retry_wait=initial_ping_retry_wait,
-            max_ping_retries=max_ping_retries,
-            log_dir=log_dir
+            max_ping_retries=max_ping_retries
         )
-
+        self._logger = Logger("WORKER_ENDPOINT", dump_folder=log_dir)
         self._context = zmq.Context()
         self._send_timeout = send_timeout
         self._socket = self._context.socket(zmq.REQ)

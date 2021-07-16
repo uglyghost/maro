@@ -6,9 +6,6 @@ import os
 from abc import ABC, abstractmethod
 from typing import Tuple
 
-# private package
-from maro.utils import Logger
-
 from ..utils import PeerFinder, default_params
 
 
@@ -20,7 +17,6 @@ class AbsEndpoint(ABC):
             as the hash key when registering itself to and getting peer addresses from the Redis server.
         name (str): Unique identifier for this wrapper within the ``group`` namespace.    
         protocol (str): The underlying transport-layer protocol for transferring messages. Defaults to "tcp".
-        logger: The logger instance or DummyLogger. Defaults to DummyLogger().
     """
 
     def __init__(
@@ -30,10 +26,8 @@ class AbsEndpoint(ABC):
         protocol: str = default_params.zmq.protocol,
         redis_address: Tuple = (default_params.redis.host, default_params.redis.port),
         initial_ping_retry_wait: int = default_params.redis.initial_ping_retry_wait,
-        max_ping_retries: int = default_params.redis.max_retries,
-        log_dir: str = os.getcwd()
+        max_ping_retries: int = default_params.redis.max_retries
     ):
-        self.logger = Logger(name, dump_folder=log_dir)
         self._group = group
         self._name = name
         self._protocol = protocol
