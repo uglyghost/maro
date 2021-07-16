@@ -320,7 +320,7 @@ class MultiNodePolicyManager(AbsPolicyManager):
                 trainer_id,
                 {
                     "type": MsgTag.INIT_POLICY_STATE,
-                    "body": {name: self.policy_dict[name].get_state() for name in policy_names}
+                    "policy_state": {name: self.policy_dict[name].get_state() for name in policy_names}
                 }
             )
 
@@ -342,14 +342,14 @@ class MultiNodePolicyManager(AbsPolicyManager):
 
         for trainer_id, policy_names in self._trainer2policies.items():
             self._endpoint.send(
-                trainer_id, {"type": MsgTag.LEARN, "body": {name: exp_to_send[name] for name in policy_names}}
+                trainer_id, {"type": MsgTag.LEARN, "experiences": {name: exp_to_send[name] for name in policy_names}}
             )
 
         trackers = []
         for _ in range(self.num_trainers):
-            payload, _ = self._endpoint.receive()
-            trackers.append(payload["body"]["tracker"])
-            for policy_name, policy_state in payload["body"]["policy_state"].items():
+            result, _ = self._endpoint.receive()
+            trackers.append(result["tracker"])
+            for policy_name, policy_state in result["policy_state"].items():
                 self.policy_dict[policy_name].set_state(policy_state)
 
         if updated:

@@ -5,7 +5,6 @@ import time
 from os import getcwd
 from typing import List, Union
 
-from maro.communication import Proxy, SessionMessage, SessionType
 from maro.rl.utils import MsgKey, MsgTag
 from maro.utils import Logger
 

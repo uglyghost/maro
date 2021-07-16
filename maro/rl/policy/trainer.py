@@ -84,20 +84,20 @@ def trainer_node(
             break
 
         if msg["type"] == MsgTag.INIT_POLICY_STATE:
-            for name, state in msg["body"].items():
+            for name, state in msg["policy_state"].items():
                 policy_dict[name] = create_policy_func_dict[name]()
                 policy_dict[name].set_state(state)
                 logger.info(f"{trainer_id} initialized policy {name}")
             endpoint.send({"type": MsgTag.INIT_POLICY_STATE_DONE})
         elif msg["type"] == MsgTag.LEARN:
             t0 = time.time()
-            for name, exp in msg["body"].items():
+            for name, exp in msg["experiences"].items():
                 policy_dict[name].store(exp)
                 policy_dict[name].learn()
 
             logger.info(f"total policy update time: {time.time() - t0}")
-            body = {
-                "policy_state": {name: policy_dict[name].get_state() for name in msg["body"]},
-                "tracker": {name: policy_dict[name].tracker for name in msg["body"]}
-            }
-            endpoint.send({"type": MsgTag.POLICY_STATE, "body": body})
+            endpoint.send({
+                "type": MsgTag.POLICY_STATE,
+                "policy_state": {name: policy_dict[name].get_state() for name in msg["experiences"]},
+                "tracker": {name: policy_dict[name].tracker for name in msg["experiences"]}
+            })

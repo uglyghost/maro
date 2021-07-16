@@ -441,17 +441,19 @@ class MultiNodeRolloutManager(AbsRolloutManager):
         Returns:
             Experiences for policy training.
         """
-        msg_body = {
-            "episode": ep,
-            "segment": segment,
-            "num_steps": self._num_steps,
-            "policy_state": policy_state_dict,
-            "version": version,
-            "exploration_step": self._exploration_step
-        }
-
         for worker_id in self._endpoint.workers:
-            self._endpoint.send(worker_id, {"type": MsgTag.COLLECT, "body": msg_body})
+            self._endpoint.send(
+                worker_id,
+                {
+                    "type": MsgTag.COLLECT,
+                    "episode": ep,
+                    "segment": segment,
+                    "num_steps": self._num_steps,
+                    "policy_state": policy_state_dict,
+                    "version": version,
+                    "exploration_step": self._exploration_step
+                }
+            )
 
         self._logger.info(f"Collecting simulation data (episode {ep}, segment {segment}, policy version {version})")
 
@@ -502,21 +504,21 @@ class MultiNodeRolloutManager(AbsRolloutManager):
             )
             return
 
-        if version - msg["body"]["version"] > self._max_lag:
+        if version - msg["version"] > self._max_lag:
             self._logger.info(
                 f"Ignored a message because it contains experiences generated using a stale policy version. "
                 f"Expected experiences generated using policy versions no earlier than {version - self._max_lag} "
-                f"got {msg['body']['version']}"
+                f"got {msg['version']}"
             )
             return
 
-        for policy_name, exp in msg["body"]["experiences"].items():
+        for policy_name, exp in msg["experiences"].items():
             combined_exp[policy_name].extend(exp)
 
         # The message is what we expect
-        if msg["body"]["episode"] == ep and msg["body"]["segment"] == segment:
-            self.episode_complete = msg["body"]["end_of_episode"]
-            return msg.body["tracker"]
+        if msg["episode"] == ep and msg["segment"] == segment:
+            self.episode_complete = msg["end_of_episode"]
+            return msg["tracker"]
 
     def evaluate(self, ep: int, policy_state_dict: dict):
         """Evaluate the performance of ``policy_state_dict``.
@@ -528,27 +530,25 @@ class MultiNodeRolloutManager(AbsRolloutManager):
         Returns:
             Environment summary.
         """
-        msg_body = {"episode": ep, "policy_state": policy_state_dict}
-
         workers = choices(self._endpoint.workers, k=self._num_eval_workers)
         for worker_id in self._endpoint.workers:
-            self._endpoint.send(worker_id, {"type": MsgTag.EVAL, "body": msg_body})
+            self._endpoint.send(worker_id, {"type": MsgTag.EVAL, "episode": ep, "policy_state": policy_state_dict})
         self._logger.info(f"Sent evaluation requests to {workers}")
 
         # Receive evaluation results from remote workers
         num_finishes, trackers = 0, []
         for _ in range(len(workers)):
             result, worker_id = self._endpoint.receive()
-            if result["type"] != MsgTag.EVAL_DONE or result["body"]["episode"] != ep:
+            if result["type"] != MsgTag.EVAL_DONE or result["episode"] != ep:
                 self._logger.info(
-                    f"Ignore a message of type {result['type']} with episode index {result['body']['episode']} "
+                    f"Ignore a message of type {result['type']} with episode index {result['episode']} "
                     f"(expected message type {MsgTag.EVAL_DONE} and episode index {ep})"
                 )
                 continue
 
-            trackers.append(result["body"]["tracker"])
+            trackers.append(result["tracker"])
 
-            if result["body"]["episode"] == ep:
+            if result["episode"] == ep:
                 num_finishes += 1
                 if num_finishes == self._num_eval_workers:
                     break

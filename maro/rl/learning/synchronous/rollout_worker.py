@@ -133,24 +133,24 @@ def rollout_worker_node(
     endpoint = SyncWorkerEndpoint(group, worker_id, "ROLLOUT_MANAGER", **endpoint_kwargs)
 
     def collect(msg):
-        ep, segment = msg["body"]["episode"], msg["body"]["segment"]
+        ep, segment = msg["episode"], msg["segment"]
 
         # set policy states
-        agent_wrapper.set_policy_states(msg["body"]["policy_state"])
+        agent_wrapper.set_policy_states(msg["policy_state"])
 
         # set exploration parameters
         agent_wrapper.explore()
-        if msg["body"]["exploration_step"]:
+        if msg["exploration_step"]:
             agent_wrapper.exploration_step()
 
         if env_wrapper.state is None:
-            logger.info(f"Roll-out episode {msg['body']['episode']}")
+            logger.info(f"Roll-out episode {msg['episode']}")
             env_wrapper.reset()
             env_wrapper.collect()
             env_wrapper.start()  # get initial state
 
         starting_step_index = env_wrapper.step_index + 1
-        steps_to_go = float("inf") if msg["body"]["num_steps"] == -1 else msg["body"]["num_steps"]
+        steps_to_go = float("inf") if msg["num_steps"] == -1 else msg["num_steps"]
         while env_wrapper.state and steps_to_go > 0:
             action = agent_wrapper.choose_action(env_wrapper.state)
             env_wrapper.step(action)
@@ -161,20 +161,20 @@ def rollout_worker_node(
             f"steps {starting_step_index} - {env_wrapper.step_index})"
         )
 
-        return_info = {
+        endpoint.send({
+            "type": MsgTag.COLLECT_DONE,
             "episode": ep,
             "segment": segment,
-            "version": msg["body"]["version"],
+            "version": msg["version"],
             "experiences": agent_wrapper.get_batch(env_wrapper),
+            "tracker": env_wrapper.tracker,
             "num_steps": env_wrapper.step_index - starting_step_index + 1,
             "end_of_episode": not env_wrapper.state
-        }
-
-        endpoint.send({"type": MsgTag.COLLECT_DONE, "body": return_info})
+        })
 
     def evaluate(msg):
         logger.info("Evaluating...")
-        agent_wrapper.set_policy_states(msg["body"]["policy_state"])
+        agent_wrapper.set_policy_states(msg["policy_state"])
         agent_wrapper.exploit()
         eval_env_wrapper.reset()
         eval_env_wrapper.evaluate()
@@ -183,8 +183,7 @@ def rollout_worker_node(
             action = agent_wrapper.choose_action(eval_env_wrapper.state)
             eval_env_wrapper.step(action)
 
-        return_info = {"tracker": eval_env_wrapper.tracker, "episode": msg["body"]["episode"]}
-        endpoint.send({"type": MsgTag.EVAL_DONE, "body": return_info})
+        endpoint.send({"type": MsgTag.EVAL_DONE, "tracker": eval_env_wrapper.tracker, "episode": msg["episode"]})
 
     """
     The event loop handles 3 types of messages from the roll-out manager:
