@@ -43,7 +43,10 @@ def trainer_process(
                 policy_dict[name].store(exp)
                 policy_dict[name].learn()
             logger.debug(f"total policy update time: {time.time() - t0}")
-            conn.send({"policy": {name: policy_dict[name].get_state() for name in msg["experiences"]}})
+            conn.send({
+                "policy": {name: policy_dict[name].get_state() for name in msg["experiences"]},
+                "tracker": {name: policy_dict[name].tracker for name in msg["experiences"]}
+            })
         elif msg["type"] == "quit":
             break
 
@@ -93,5 +96,8 @@ def trainer_node(
                 policy_dict[name].learn()
 
             logger.info(f"total policy update time: {time.time() - t0}")
-            policy_states = {name: policy_dict[name].get_state() for name in msg["body"]}
-            endpoint.send({"type": MsgTag.POLICY_STATE, "body": policy_states})
+            body = {
+                "policy_state": {name: policy_dict[name].get_state() for name in msg["body"]},
+                "tracker": {name: policy_dict[name].tracker for name in msg["body"]}
+            }
+            endpoint.send({"type": MsgTag.POLICY_STATE, "body": body})

@@ -53,8 +53,9 @@ def rollout_worker_process(
             agent_wrapper.exploration_step()
 
         if env_wrapper.state is None:
-            logger.info(f"Training episode {ep}")
+            logger.info(f"Roll-out episode {ep}")
             env_wrapper.reset()
+            env_wrapper.collect()
             env_wrapper.start()  # get initial state
 
         starting_step_index = env_wrapper.step_index + 1
@@ -73,7 +74,7 @@ def rollout_worker_process(
             "worker_index": index,
             "episode_end": not env_wrapper.state,
             "experiences": agent_wrapper.get_batch(env_wrapper),
-            "env_summary": env_wrapper.summary,
+            "tracker": env_wrapper.tracker,
             "num_steps": env_wrapper.step_index - starting_step_index + 1
         }
 
@@ -84,12 +85,13 @@ def rollout_worker_process(
         agent_wrapper.set_policy_states(msg["policy"])
         agent_wrapper.exploit()
         eval_env_wrapper.reset()
+        eval_env_wrapper.evaluate()
         eval_env_wrapper.start()  # get initial state
         while eval_env_wrapper.state:
             action = agent_wrapper.choose_action(eval_env_wrapper.state)
             eval_env_wrapper.step(action)
 
-        conn.send({"worker_id": index, "env_summary": eval_env_wrapper.summary})
+        conn.send({"worker_id": index, "tracker": eval_env_wrapper.tracker})
 
     while True:
         msg = conn.recv()
@@ -142,8 +144,9 @@ def rollout_worker_node(
             agent_wrapper.exploration_step()
 
         if env_wrapper.state is None:
-            logger.info(f"Training episode {msg['body']['episode']}")
+            logger.info(f"Roll-out episode {msg['body']['episode']}")
             env_wrapper.reset()
+            env_wrapper.collect()
             env_wrapper.start()  # get initial state
 
         starting_step_index = env_wrapper.step_index + 1
@@ -163,11 +166,10 @@ def rollout_worker_node(
             "segment": segment,
             "version": msg["body"]["version"],
             "experiences": agent_wrapper.get_batch(env_wrapper),
-            "num_steps": env_wrapper.step_index - starting_step_index + 1
+            "num_steps": env_wrapper.step_index - starting_step_index + 1,
+            "end_of_episode": not env_wrapper.state
         }
 
-        if not env_wrapper.state:
-            return_info["summary"] = env_wrapper.summary
         endpoint.send({"type": MsgTag.COLLECT_DONE, "body": return_info})
 
     def evaluate(msg):
@@ -175,12 +177,13 @@ def rollout_worker_node(
         agent_wrapper.set_policy_states(msg["body"]["policy_state"])
         agent_wrapper.exploit()
         eval_env_wrapper.reset()
+        eval_env_wrapper.evaluate()
         eval_env_wrapper.start()  # get initial state
         while eval_env_wrapper.state:
             action = agent_wrapper.choose_action(eval_env_wrapper.state)
             eval_env_wrapper.step(action)
 
-        return_info = {"env_summary": eval_env_wrapper.summary, "episode": msg["body"]["episode"]}
+        return_info = {"tracker": eval_env_wrapper.tracker, "episode": msg["body"]["episode"]}
         endpoint.send({"type": MsgTag.EVAL_DONE, "body": return_info})
 
     """
