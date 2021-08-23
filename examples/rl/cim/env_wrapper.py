@@ -3,7 +3,8 @@
 
 import numpy as np
 
-from maro.rl.learning import AbsEnvWrapper
+from maro.rl.policy import ACActionInfo
+from maro.rl.wrappers import AbsEnvWrapper
 from maro.simulator import Env
 from maro.simulator.scenarios.cim.common import Action, ActionType
 
@@ -73,7 +74,7 @@ class CIMEnvWrapper(AbsEnvWrapper):
             )
             early_discharge = vessel_snapshots[tick:vessel:"early_discharge"][0] if self.has_early_discharge else 0
 
-            model_action = action_info[0] if isinstance(action_info, tuple) else action_info
+            model_action = action_info.action if isinstance(action_info, ACActionInfo) else action_info
             percent = abs(self.action_space[model_action])
             zero_action_idx = len(self.action_space) / 2  # index corresponding to value zero.
             if model_action < zero_action_idx:
@@ -139,9 +140,6 @@ env_config = {
 
 def get_env_wrapper(replay_agent_ids=None):
     return CIMEnvWrapper(Env(**env_config["basic"]), replay_agent_ids=replay_agent_ids, **env_config["wrapper"]) 
-
-
-tmp_env_wrapper = get_env_wrapper()
-AGENT_IDS = tmp_env_wrapper.agent_idx_list
-STATE_DIM = tmp_env_wrapper.state_dim
-del tmp_env_wrapper
+ 
+# obtain state dimension from a temporary env_wrapper instance
+STATE_DIM = get_env_wrapper().state_dim

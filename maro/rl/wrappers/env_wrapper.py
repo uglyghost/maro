@@ -5,31 +5,8 @@ from abc import ABC, abstractmethod
 from collections import defaultdict, deque
 from typing import Callable
 
-from maro.rl.experience import ExperienceSet
+from maro.rl.types import Trajectory, Transition
 from maro.simulator import Env
-
-
-class Transition:
-    """Convenience class to be used in an environment wrapper's post-step processing function.
-
-    Args:
-        state: Output of the environment wrapper's ``get_state``.
-        action: Output of the ``AgentWrapper`` that interacts with environment wrapper.
-        env_action: Output of the environment wrapper's ``to_env_action``.
-        reward: Output of the environmet wrapper's ``get_reward``.
-        next_state: The state immediately following ``state``.
-        info: Output of the environment wrapper's ``get_transition_info``.
-    """
-
-    __slots__ = ["state", "action", "env_action", "reward", "next_state", "info"]
-
-    def __init__(self, state, action, env_action, reward, next_state, info):
-        self.state = state
-        self.action = action
-        self.env_action = env_action
-        self.reward = reward
-        self.next_state = next_state
-        self.info = info
 
 
 class AbsEnvWrapper(ABC):
@@ -43,8 +20,6 @@ class AbsEnvWrapper(ABC):
         replay_agent_ids (list): List of agent IDs whose transitions will be stored in internal replay buffers.
             If it is None, it will be set to all agents in the environment (i.e., env.agent_idx_list). Defaults
             to None.
-        get_experience_func (Callable): Custom function to convert the replay buffer to training experiences. Defaults
-            to None, in which case the replay buffer will be converted directly to SARS experiences for each agent.
         post_step (Callable): Custom function to gather information about a transition and the evolvement of the
             environment. The function signature should be (env, tracker, transition) -> None, where env is the ``Env``
             instance in the wrapper, tracker is a dictionary where the gathered information is stored and transition
@@ -56,13 +31,11 @@ class AbsEnvWrapper(ABC):
         env: Env,
         reward_eval_delay: int = 0,
         replay_agent_ids: list = None,
-        get_experience_func: Callable = None,
         post_step: Callable = None
     ):
         self.env = env
         self.reward_eval_delay = reward_eval_delay
 
-        self._get_experience_func = get_experience_func
         self._post_step = post_step
 
         replay_agent_ids = self.env.agent_idx_list if not replay_agent_ids else replay_agent_ids
@@ -73,7 +46,7 @@ class AbsEnvWrapper(ABC):
         self._state = None  # the latest extracted state is kept here
 
         self.tracker = {}  # User-defined tracking information is placed here.
-        self._replay = True
+        self.replay = True
 
     @property
     def step_index(self):
@@ -96,12 +69,6 @@ class AbsEnvWrapper(ABC):
     @property
     def event(self):
         return self._event
-
-    def collect(self):
-        self._replay = True
-
-    def evaluate(self):
-        self._replay = False
 
     def start(self):
         """Generate the initial environmental state at the beginning of a simulation episode."""
@@ -197,7 +164,7 @@ class AbsEnvWrapper(ABC):
                 # put things you want to track in the tracker attribute
                 self._post_step(self.env, self.tracker, transition)
 
-            if self._replay:
+            if self.replay:
                 for agent_id, agent_state in state.items():
                     if agent_id in self._replay_buffer:
                         buf = self._replay_buffer[agent_id]
@@ -206,29 +173,35 @@ class AbsEnvWrapper(ABC):
                         buf["rewards"].append(reward[agent_id])
                         buf["info"].append(info[agent_id] if info else None)
 
-    def get_experiences(self):
-        """Get per-agent experiences from the replay buffer."""
-        if not self._get_experience_func:
-            exp_by_agent = {
-                agent_id: ExperienceSet(
-                    buf["states"][:-1],
-                    buf["actions"][:-1],
-                    buf["rewards"][:-1],
-                    buf["states"][1:],
-                    buf["info"][:-1],
-                ) for agent_id, buf in self._replay_buffer.items()
-            }
-        else:
-            exp_by_agent = self._get_experience_func(self._replay_buffer)
+    def get_trajectory(self, clear_buffer: bool = True):
+        """Get agent trajectories from the replay buffer and clear it in the process."""
+        trajectory = {}
+        for agent_id, buf in self._replay_buffer.items():
+            # end of an episode
+            if not self._state:
+                states = buf["states"] + [None]
+                actions = buf["actions"] + [None]
+                rewards = buf["rewards"][:]
+                info = buf["info"][:]
+                if clear_buffer:
+                    del buf["states"]
+                    del buf["actions"]
+                    del buf["rewards"]
+                    del buf["info"]
+            else:
+                states = buf["states"][:]
+                actions = buf["actions"][:]
+                rewards = buf["rewards"][:-1]
+                info = buf["info"][:-1]
+                if clear_buffer:
+                    del buf["states"][:-1]
+                    del buf["actions"][:-1]
+                    del buf["rewards"][:-1]
+                    del buf["info"][:-1]
 
-        # clear the replay buffer of transitions that have already been converted to experiences.
-        for buf in self._replay_buffer.values():
-            del buf["states"][:-1]
-            del buf["actions"][:-1]
-            del buf["rewards"][:-1]
-            del buf["info"][:-1]
+            trajectory[agent_id] = Trajectory(states, actions, rewards, info)
 
-        return exp_by_agent
+        return trajectory
 
     def reset(self):
         self.env.reset()

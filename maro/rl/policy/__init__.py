@@ -1,11 +1,18 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
-from .policy import AbsCorePolicy, AbsPolicy, NullPolicy
-from .policy_manager import AbsPolicyManager, LocalPolicyManager, MultiNodePolicyManager, MultiProcessPolicyManager
-from .trainer import trainer_node, trainer_process
+from .ac import ACActionInfo, ACBatch, ACLossInfo, ActorCritic, DiscreteACNet
+from .ddpg import DDPG, ContinuousACNet, DDPGBatch, DDPGLossInfo
+from .dqn import DQN, DiscreteQNet, DQNBatch, DQNLossInfo, PrioritizedExperienceReplay
+from .index import get_model_cls, get_policy_cls
+from .pg import DiscretePolicyNet, PGActionInfo, PGBatch, PGLossInfo, PolicyGradient
+from .policy import AbsPolicy, Batch, LossInfo, NullPolicy, RLPolicy
 
 __all__ = [
-    "AbsCorePolicy", "AbsPolicy", "AbsPolicyManager", "LocalPolicyManager", "MultiNodePolicyManager",
-    "MultiProcessPolicyManager", "NullPolicy", "trainer_node", "trainer_process"
+    "ACActionInfo", "ACBatch", "ACLossInfo", "ActorCritic", "DiscreteACNet",
+    "DDPG", "DDPGBatch", "DDPGLossInfo", "ContinuousACNet",
+    "DQN", "DQNBatch", "DQNLossInfo", "DiscreteQNet", "PrioritizedExperienceReplay",
+    "PGActionInfo", "PGBatch", "PGLossInfo", "DiscretePolicyNet", "PolicyGradient",
+    "AbsPolicy", "Batch", "LossInfo", "NullPolicy", "RLPolicy",
+    "get_model_cls", "get_policy_cls"
 ]
