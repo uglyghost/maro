@@ -8,7 +8,7 @@ from os import getcwd
 from random import choices
 from typing import Callable
 
-from maro.communication.endpoints import ManagerEndpoint
+from maro.communication.patterns import ManagerEndpoint
 from maro.rl.utils import MsgTag
 from maro.rl.wrappers import AbsEnvWrapper, AgentWrapper
 from maro.utils import Logger, set_seeds
@@ -351,7 +351,7 @@ class DistributedRolloutManager(AbsRolloutManager):
             self._endpoint.send(
                 worker_id,
                 {
-                    "type": MsgTag.COLLECT,
+                    "type": MsgTag.SAMPLE,
                     "episode": ep,
                     "segment": segment,
                     "num_steps": self._num_steps,

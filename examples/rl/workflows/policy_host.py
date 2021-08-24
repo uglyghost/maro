@@ -24,7 +24,7 @@ if __name__ == "__main__":
         rl_policy_func_index,
         int(host_id),
         group,
-        proxy_kwargs={
+        endpoint_kwargs={
             "redis_address": (getenv("REDISHOST", default="maro-redis"), int(getenv("REDISPORT", default=6379))),
             "max_peer_discovery_retries": 50
         },

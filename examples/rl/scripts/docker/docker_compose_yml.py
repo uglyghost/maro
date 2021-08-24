@@ -6,19 +6,6 @@ import yaml
 from copy import deepcopy
 from os.path import dirname, join, realpath
 
-<<<<<<< HEAD
-path = realpath(__file__)
-docker_script_dir = dirname(path)
-rl_example_dir = dirname(dirname(docker_script_dir))
-root_dir = dirname(dirname(rl_example_dir))
-workflow_dir = join(rl_example_dir, "workflows")
-maro_rl_dir = join(root_dir, "maro", "rl")
-maro_comm_dir = join(root_dir, "maro", "communication")
-maro_utils_dir = join(root_dir, "maro", "utils")
-config_path = join(workflow_dir, "config.yml")
-dockerfile_path = join(root_dir, "docker_files", "dev.df")
-=======
->>>>>>> v0.2_rl_refinement
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -33,7 +20,7 @@ if __name__ == "__main__":
     workflow_dir = join(rl_example_dir, "workflows")
     maro_rl_dir = join(root_dir, "maro", "rl")
     maro_comm_dir = join(root_dir, "maro", "communication")
-    maro_sc_dir = join(root_dir, "maro", "simulator", "scenarios", "supply_chain")
+    maro_utils_dir = join(root_dir, "maro", "utils")
     config_path = join(workflow_dir, "config.yml")
     dockerfile_path = join(root_dir, "docker_files", "dev.df")
 
@@ -52,23 +39,10 @@ if __name__ == "__main__":
             f"{rl_example_dir}:/maro/rl_examples",
             f"{maro_rl_dir}:/maro/maro/rl",
             f"{maro_comm_dir}:/maro/maro/communication",
-            f"{maro_sc_dir}:/maro/maro/simulator/scenarios/supply_chain"
+            f"{maro_utils_dir}:/maro/maro/utils"
         ]
     }
 
-<<<<<<< HEAD
-docker_compose_manifest = {"version": "3.9", "services": {"redis": {"image": "redis:6", "container_name": redis_host}}}
-common_spec = {
-    "build": {"context": root_dir, "dockerfile": dockerfile_path},
-    "image": "maro",
-    "volumes": [
-        f"{rl_example_dir}:/maro/rl_examples",
-        f"{maro_rl_dir}:/maro/maro/rl",
-        f"{maro_comm_dir}:/maro/maro/communication",
-        f"{maro_utils_dir}:/maro/maro/utils" 
-    ]
-}
-=======
     common_env = [
         f"REDISHOST={namespace}.{redis_host}",
         f"REDISPORT={config['redis']['port']}",
@@ -78,7 +52,6 @@ common_spec = {
         f"POLICYMANAGERTYPE={config['policy_manager']['type']}",
         f"EXPDIST={'1' if config['rollout_experience_distribution'] else '0'}"
     ]
->>>>>>> v0.2_rl_refinement
 
     if config["mode"] == "async":
         num_rollouts = config['async']['num_actors']
@@ -97,7 +70,7 @@ common_spec = {
             str_id = f"policy_host.{host_id}"
             host_spec = deepcopy(common_spec)
             del host_spec["build"]
-            host_spec["command"] = "python3 /maro/rl_examples/workflows/policy_manager/policy_host.py"
+            host_spec["command"] = "python3 /maro/rl_examples/workflows/policy_host.py"
             host_spec["container_name"] = f"{namespace}.{str_id}"
             host_spec["environment"] = [f"HOSTID={host_id}"] + common_env
             docker_compose_manifest["services"][str_id] = host_spec
@@ -109,7 +82,7 @@ common_spec = {
             **common_spec, 
             **{
                 "container_name": f"{namespace}.learner",
-                "command": "python3 /maro/rl_examples/workflows/synchronous/learner.py",
+                "command": "python3 /maro/rl_examples/workflows/learner.py",
                 "environment": [
                     f"ROLLOUTTYPE={config['sync']['rollout_type']}",
                     f"EVALPARALLELISM={config['sync']['simple']['eval_parallelism']}",
@@ -132,7 +105,7 @@ common_spec = {
                 str_id = f"rollout_worker.{worker_id}"
                 worker_spec = deepcopy(common_spec)
                 del worker_spec["build"]
-                worker_spec["command"] = "python3 /maro/rl_examples/workflows/synchronous/rollout_worker.py"
+                worker_spec["command"] = "python3 /maro/rl_examples/workflows/rollout.py"
                 worker_spec["container_name"] = f"{namespace}.{str_id}"
                 worker_spec["environment"] = [
                     f"WORKERID={worker_id}",
@@ -146,7 +119,7 @@ common_spec = {
             **common_spec, 
             **{
                 "container_name": f"{namespace}.policy_server",
-                "command": "python3 /maro/rl_examples/workflows/asynchronous/policy_server.py",
+                "command": "python3 /maro/rl_examples/workflows/policy_manager.py",
                 "environment": [
                     f"GROUP={config['async']['group']}",
                     f"MAXLAG={config['max_lag']}"
@@ -158,7 +131,7 @@ common_spec = {
             str_id = f"actor.{actor_id}"
             actor_spec = deepcopy(common_spec)
             del actor_spec["build"]
-            actor_spec["command"] = "python3 /maro/rl_examples/workflows/asynchronous/actor.py"
+            actor_spec["command"] = "python3 /maro/rl_examples/workflows/rollout.py"
             actor_spec["container_name"] = f"{namespace}.{str_id}"
             actor_spec["environment"] = [
                 f"ACTORID={actor_id}",

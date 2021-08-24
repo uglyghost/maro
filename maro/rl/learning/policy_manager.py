@@ -8,7 +8,7 @@ from multiprocessing import Pipe, Process
 from os import getcwd
 from typing import Callable, Dict, List
 
-from maro.communication.endpoints import ManagerEndpoint, SyncWorkerEndpoint
+from maro.communication.patterns import ManagerEndpoint, SyncWorkerEndpoint
 from maro.communication.utils import Signal
 from maro.rl.policy import LossInfo, RLPolicy
 from maro.rl.types import Trajectory
@@ -24,7 +24,7 @@ class AbsPolicyManager(ABC):
     @abstractmethod
     def update(self, rollout_info: Dict[str, list]):
         """Update policies using roll-out information.
-        
+
         The roll-out information is grouped by policy name and may be either raw simulation trajectories or loss
         information computed directly by roll-out workers.
         """
@@ -50,7 +50,8 @@ class AbsPolicyManager(ABC):
     ):
         """Run a server process.
 
-        The process serves the latest policy states to a set of remote actors and receives simulated experiences from them.
+        The process serves the latest policy states to a set of remote actors and receives simulated experiences from
+        them.
 
         Args:
             group (str): Group name for the cluster that includes the server and all actors.
@@ -66,7 +67,7 @@ class AbsPolicyManager(ABC):
 
 
 class SimplePolicyManager(AbsPolicyManager):
-    """Policy manager that contains all policy instances. 
+    """Policy manager that contains all policy instances.
 
     Args:
         create_policy_func_dict (dict): Dictionary that maps policy names to policy creators. A policy creator is a
@@ -134,7 +135,7 @@ class SimplePolicyManager(AbsPolicyManager):
 
     def update(self, rollout_info: Dict[str, list]):
         """Update policies using roll-out information.
-        
+
         The roll-out information is grouped by policy name and may be either raw simulation trajectories or loss
         information computed directly by roll-out workers.
         """
@@ -295,7 +296,7 @@ def policy_host(
         log_dir (str): Directory to store logs in. Defaults to the current working directory.
     """
     policy_dict = {}
-    host_id = f"TRAINER.{host_idx}"
+    host_id = f"POLICY_HOST.{host_idx}"
     logger = Logger(host_id, dump_folder=log_dir)
     endpoint = SyncWorkerEndpoint(group, host_id, "POLICY_MANAGER", **endpoint_kwargs) 
 
