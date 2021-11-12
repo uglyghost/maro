@@ -201,7 +201,7 @@ class SimplePolicyManager(AbsPolicyManager):
         if self._data_parallel:
             self._proxy.ibroadcast("grad_worker", MsgTag.EXIT, SessionType.NOTIFICATION)
             self._proxy.ibroadcast("task_queue", MsgTag.EXIT, SessionType.NOTIFICATION)
-        self._proxy.close()
+            self._proxy.close()
         self._logger.info("Exiting...")
 
 
