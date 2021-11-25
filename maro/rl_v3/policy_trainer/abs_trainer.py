@@ -3,6 +3,8 @@ from typing import Dict, List, Optional
 
 import torch
 
+from maro.communication import Proxy
+from maro.rl.data_parallelism import TaskQueueClient
 from maro.rl_v3.policy import RLPolicy
 from maro.rl_v3.replay_memory import MultiReplayMemory, ReplayMemory
 from maro.rl_v3.utils import MultiTransitionBatch, TransitionBatch
@@ -19,12 +21,14 @@ class AbsTrainer(object, metaclass=ABCMeta):
 
         print(f"Creating trainer {self.__class__.__name__} {name} on device {self._device}")
 
+        self._task_queue_client = Optional[TaskQueueClient]
+
     @property
     def name(self) -> str:
         return self._name
 
     @abstractmethod
-    def train_step(self) -> None:
+    def train_step(self, data_parallel: bool = False) -> None:
         """
         Run a training step to update all the policies that this trainer is responsible for.
         """
@@ -49,6 +53,34 @@ class AbsTrainer(object, metaclass=ABCMeta):
             policy_state_dict (Dict[str, object]): A double-deck dict with format: {policy_name: policy_state}.
         """
         raise NotImplementedError
+
+    @abstractmethod
+    def get_trainer_state_dict(self) -> dict:
+        raise NotImplementedError
+
+    @abstractmethod
+    def set_trainer_state_dict(self, trainer_state_dict: dict) -> None:
+        raise NotImplementedError
+
+    def data_parallel(self, *args, **kwargs) -> None:
+        """
+        Initialize a proxy in the policy, for data-parallel training.
+        Using the same arguments as `Proxy`.
+        """
+        self._task_queue_client = TaskQueueClient()
+        self._task_queue_client.create_proxy(*args, **kwargs)
+
+    def data_parallel_with_existing_proxy(self, proxy: Proxy) -> None:
+        """
+        Initialize a proxy in the policy with an existing one, for data-parallel training.
+        """
+        self._task_queue_client = TaskQueueClient()
+        self._task_queue_client.set_proxy(proxy)
+
+    def exit_data_parallel(self) -> None:
+        if self._task_queue_client is not None:
+            self._task_queue_client.exit()
+            self._task_queue_client = None
 
 
 class SingleTrainer(AbsTrainer, metaclass=ABCMeta):

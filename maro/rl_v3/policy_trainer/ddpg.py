@@ -72,16 +72,14 @@ class DDPG(SingleTrainer):
     def _get_batch(self, batch_size: int = None) -> TransitionBatch:
         return self._replay_memory.sample(batch_size if batch_size is not None else self._train_batch_size)
 
-    def train_step(self) -> None:
+    def train_step(self, data_parallel: bool = False) -> None:
         for _ in range(self._num_epochs):
             self._improve(self._get_batch())
             self._update_target_policy()
 
-    def _improve(self, batch: TransitionBatch) -> None:
-        """
-        Reference: https://spinningup.openai.com/en/latest/algorithms/ddpg.html
-        """
+    def _get_critic_loss(self, batch: TransitionBatch) -> torch.Tensor:
         self._policy.train()
+        self._q_critic_net.train()
 
         states = ndarray_to_tensor(batch.states, self._device)  # s
         next_states = ndarray_to_tensor(batch.next_states, self._device)  # s'
@@ -99,15 +97,33 @@ class DDPG(SingleTrainer):
         target_q_values = (rewards + self._reward_discount * (1 - terminals) * next_q_values).detach()
 
         q_values = self._q_critic_net.q_values(states=states, actions=actions)  # Q(s, a)
-        critic_loss = self._q_value_loss_func(q_values, target_q_values)  # MSE(Q(s, a), y(r, s', d))
+        return self._q_value_loss_func(q_values, target_q_values)  # MSE(Q(s, a), y(r, s', d))
+
+    def _get_actor_loss(self, batch: TransitionBatch) -> torch.Tensor:
+        self._policy.train()
+        self._q_critic_net.train()
+
+        states = ndarray_to_tensor(batch.states, self._device)  # s
+
+        self._q_critic_net.freeze()
         policy_loss = -self._q_critic_net.q_values(
             states=states,  # s
             actions=self._policy.get_actions_tensor(states)  # miu(s)
         ).mean()  # -Q(s, miu(s))
 
-        # Update Q first, then freeze Q and update miu.
+        return policy_loss
+
+    def _improve(self, batch: TransitionBatch) -> None:
+        """
+        Reference: https://spinningup.openai.com/en/latest/algorithms/ddpg.html
+        """
+        critic_loss = self._get_critic_loss(batch)
+        self._q_critic_net.train()
         self._q_critic_net.step(critic_loss * self._critic_loss_coef)
+
         self._q_critic_net.freeze()
+        policy_loss = self._get_actor_loss(batch)
+        self._policy.train()
         self._policy.step(policy_loss)
         self._q_critic_net.unfreeze()
 
@@ -117,3 +133,17 @@ class DDPG(SingleTrainer):
             self._target_policy.soft_update(self._policy, self._soft_update_coef)
             self._target_q_critic_net.soft_update(self._q_critic_net, self._soft_update_coef)
             self._target_policy_ver = self._policy_ver
+
+    def get_trainer_state_dict(self) -> dict:
+        return {
+            "policy_status": self.get_policy_state_dict(),
+            "target_policy_status": self._target_policy.get_policy_state(),
+            "critic_status": self._q_critic_net.get_net_state(),
+            "target_critic_status": self._target_q_critic_net.get_net_state()
+        }
+
+    def set_trainer_state_dict(self, trainer_state_dict: dict) -> None:
+        self.set_policy_state_dict(trainer_state_dict["policy_status"])
+        self._target_policy.set_policy_state(trainer_state_dict["target_policy_status"])
+        self._q_critic_net.set_net_state(trainer_state_dict["critic_status"])
+        self._target_q_critic_net.set_net_state(trainer_state_dict["target_critic_status"])

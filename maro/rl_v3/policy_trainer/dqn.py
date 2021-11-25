@@ -53,7 +53,7 @@ class DQN(SingleTrainer):
     def _get_batch(self, batch_size: int = None) -> TransitionBatch:
         return self._replay_memory.sample(batch_size if batch_size is not None else self._train_batch_size)
 
-    def train_step(self) -> None:
+    def train_step(self, data_parallel: bool = False) -> None:
         for _ in range(self._num_epochs):
             self._improve(self._get_batch())
         self._policy_ver += 1
@@ -61,7 +61,7 @@ class DQN(SingleTrainer):
             self._target_policy.soft_update(self._policy, self._soft_update_coef)
             self._target_policy_ver = self._policy_ver
 
-    def _improve(self, batch: TransitionBatch) -> None:
+    def _get_loss(self, batch: TransitionBatch) -> torch.Tensor:
         self._policy.train()
         states = ndarray_to_tensor(batch.states, self._device)
         next_states = ndarray_to_tensor(batch.next_states, self._device)
@@ -81,8 +81,11 @@ class DQN(SingleTrainer):
         target_q_values = (rewards + self._reward_discount * (1 - terminals) * next_q_values).detach()
 
         q_values = self._policy.q_values_tensor(states, actions)
-        loss = self._loss_func(q_values, target_q_values)
+        return self._loss_func(q_values, target_q_values)
 
+    def _improve(self, batch: TransitionBatch) -> None:
+        loss = self._get_loss(batch)
+        self._policy.train()
         self._policy.step(loss)
 
     def _register_policy_impl(self, policy: ValueBasedPolicy) -> None:
@@ -98,3 +101,13 @@ class DQN(SingleTrainer):
             capacity=self._replay_memory_capacity, state_dim=policy.state_dim,
             action_dim=policy.action_dim, random_overwrite=self._random_overwrite
         )
+
+    def get_trainer_state_dict(self) -> dict:
+        return {
+            "policy_status": self.get_policy_state_dict(),
+            "target_policy_status": self._target_policy.get_policy_state()
+        }
+
+    def set_trainer_state_dict(self, trainer_state_dict: dict) -> None:
+        self.set_policy_state_dict(trainer_state_dict["policy_status"])
+        self._target_policy.set_policy_state(trainer_state_dict["target_policy_status"])

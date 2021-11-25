@@ -68,16 +68,24 @@ class DiscreteActorCritic(SingleTrainer):
         self._v_critic_net = self._get_v_net_func()
         self._v_critic_net.to(self._device)
 
-    def train_step(self) -> None:
+    def train_step(self, data_parallel: bool = False) -> None:
         self._improve(self._get_batch())
 
-    def _improve(self, batch: TransitionBatch) -> None:
-        """
-        Reference: https://tinyurl.com/2ezte4cr
-        """
-        v_critic_net_copy = clone(self._v_critic_net)
-        v_critic_net_copy.eval()
+    def _get_critic_loss(self, batch: TransitionBatch) -> torch.Tensor:
+        states = ndarray_to_tensor(batch.states, self._device)  # s
 
+        self._policy.train()
+        self._v_critic_net.train()
+
+        state_values = self._v_critic_net.v_values(states)
+        values = state_values.detach().numpy()
+        values = np.concatenate([values, values[-1:]])
+        rewards = np.concatenate([batch.rewards, values[-1:]])
+        returns = ndarray_to_tensor(discount_cumsum(rewards, self._reward_discount)[:-1], self._device)
+
+        return self._critic_loss_func(state_values, returns)
+
+    def _get_actor_loss(self, batch: TransitionBatch) -> torch.Tensor:
         states = ndarray_to_tensor(batch.states, self._device)  # s
         actions = ndarray_to_tensor(batch.actions, self._device).long()  # a
 
@@ -86,29 +94,42 @@ class DiscreteActorCritic(SingleTrainer):
 
         self._policy.train()
         self._v_critic_net.train()
+
+        state_values = self._v_critic_net.v_values(states)
+        values = state_values.detach().numpy()
+        values = np.concatenate([values, values[-1:]])
+        rewards = np.concatenate([batch.rewards, values[-1:]])
+        deltas = rewards[:-1] + self._reward_discount * values[1:] - values[:-1]  # r + gamma * v(s') - v(s)
+        advantages = ndarray_to_tensor(discount_cumsum(deltas, self._reward_discount * self._lam), self._device)
+
+        action_probs = self._policy.get_action_probs(states)
+        logps = torch.log(action_probs.gather(1, actions).squeeze())
+        logps = torch.clamp(logps, min=self._min_logp, max=.0)
+        if self._clip_ratio is not None:
+            ratio = torch.exp(logps - logps_old)
+            clipped_ratio = torch.clamp(ratio, 1 - self._clip_ratio, 1 + self._clip_ratio)
+            return -(torch.min(ratio * advantages, clipped_ratio * advantages)).mean()
+        else:
+            return -(logps * advantages).mean()  # I * delta * log pi(a|s)
+
+    def _improve(self, batch: TransitionBatch) -> None:
+        """
+        Reference: https://tinyurl.com/2ezte4cr
+        """
         for _ in range(self._grad_iters):
-            state_values = self._v_critic_net.v_values(states)
-            values = state_values.detach().numpy()
-            values = np.concatenate([values, values[-1:]])
-            rewards = np.concatenate([batch.rewards, values[-1:]])
-            deltas = rewards[:-1] + self._reward_discount * values[1:] - values[:-1]  # r + gamma * v(s') - v(s)
-            returns = ndarray_to_tensor(discount_cumsum(rewards, self._reward_discount)[:-1], self._device)
-            advantages = ndarray_to_tensor(discount_cumsum(deltas, self._reward_discount * self._lam), self._device)
-
-            # Critic loss
-            critic_loss = self._critic_loss_func(state_values, returns)
-
-            # Actor loss
-            action_probs = self._policy.get_action_probs(states)
-            logps = torch.log(action_probs.gather(1, actions).squeeze())
-            logps = torch.clamp(logps, min=self._min_logp, max=.0)
-            if self._clip_ratio is not None:
-                ratio = torch.exp(logps - logps_old)
-                clipped_ratio = torch.clamp(ratio, 1 - self._clip_ratio, 1 + self._clip_ratio)
-                actor_loss = -(torch.min(ratio * advantages, clipped_ratio * advantages)).mean()
-            else:
-                actor_loss = -(logps * advantages).mean()  # I * delta * log pi(a|s)
-
-            # Update
+            actor_loss = self._get_actor_loss(batch)
+            critic_loss = self._get_critic_loss(batch)
+            self._policy.train()
             self._policy.step(actor_loss)
+            self._v_critic_net.train()
             self._v_critic_net.step(critic_loss * self._critic_loss_coef)
+
+    def get_trainer_state_dict(self) -> dict:
+        return {
+            "critic_status": self._v_critic_net.get_net_state(),
+            "policy_status": self.get_policy_state_dict()
+        }
+
+    def set_trainer_state_dict(self, trainer_state_dict: dict) -> None:
+        self._v_critic_net.set_net_state(trainer_state_dict["critic_status"])
+        self.set_policy_state_dict(trainer_state_dict["policy_status"])
