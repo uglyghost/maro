@@ -101,7 +101,7 @@ class DDPG(SingleTrainer):
 
     def _get_actor_loss(self, batch: TransitionBatch) -> torch.Tensor:
         self._policy.train()
-        self._q_critic_net.train()
+        self._q_critic_net.freeze()
 
         states = ndarray_to_tensor(batch.states, self._device)  # s
 
@@ -111,6 +111,7 @@ class DDPG(SingleTrainer):
             actions=self._policy.get_actions_tensor(states)  # miu(s)
         ).mean()  # -Q(s, miu(s))
 
+        self._q_critic_net.unfreeze()
         return policy_loss
 
     def _improve(self, batch: TransitionBatch) -> None:
@@ -121,11 +122,9 @@ class DDPG(SingleTrainer):
         self._q_critic_net.train()
         self._q_critic_net.step(critic_loss * self._critic_loss_coef)
 
-        self._q_critic_net.freeze()
         policy_loss = self._get_actor_loss(batch)
         self._policy.train()
         self._policy.step(policy_loss)
-        self._q_critic_net.unfreeze()
 
     def _update_target_policy(self) -> None:
         self._policy_ver += 1
